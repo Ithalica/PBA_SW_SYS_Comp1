@@ -14,7 +14,6 @@ namespace Customer
     {
         IBus bus = RabbitHutch.CreateBus("host=localhost");
         OrderReply reply = null;
-        int timeout = 10000;
         int count = 0;
         public void CreateOrder(Domain.Customer customer, Product product)
         {
