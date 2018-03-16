@@ -33,7 +33,7 @@ namespace Customer
         private void ProcessOrder(OrderReply message)
         {
             reply = message;
-            Console.WriteLine("Proccesed order" + reply.OrderId + "Delivery type: " + message.DeliveryType);
+            Console.WriteLine("Proccesed order" + reply.OrderId + " Delivery type: " + message.DeliveryType + " Shippingfee: " + message.ShippingFee + " Delivery time" + message.DeliveryTime);
             
         }
     }
