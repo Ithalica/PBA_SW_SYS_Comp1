@@ -1,30 +1,27 @@
 ﻿using Domain;
 using EasyNetQ;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Warehouse
 {
-   public class DepartmentGateway
+    public class DepartmentGateway
     {
-        const int InternalShippingCharge = 5;
-        const int ExternalShippingCharge = 10;
-        const int InternalShippingDays = 2;
-        const int ExternalShippingDays = 10;
-        IBus bus = RabbitHutch.CreateBus("host=localhost");
+        private const int InternalShippingCharge = 5;
+        private const int ExternalShippingCharge = 10;
+        private const int InternalShippingDays = 2;
+        private const int ExternalShippingDays = 10;
+        private readonly IBus _bus = RabbitHutch.CreateBus("host=localhost");
 
         public void DoStuff(Department department)
         {
-            using (bus)
+            using (_bus)
             {
-                bus.Subscribe<Order>("department" + department.Id,
+                _bus.Subscribe<Order>("department" + department.Id,
                                            x => CheckOrder(x, department), x => x.WithTopic(department.Country));
 
-                bus.Subscribe<BroadCastOrder>("department" + department.Id,
+                _bus.Subscribe<BroadCastOrder>("department" + department.Id,
                    x => CheckOrder(x, department));
                 Console.WriteLine("Subscribed");
                 Console.ReadLine();
@@ -41,7 +38,7 @@ namespace Warehouse
             string orderType;
             if (order is BroadCastOrder broadcastORder)
             {
-                Console.WriteLine("Broadcast order recived at department " +
+                Console.WriteLine("Broadcast order recieved at department " +
                      department.Id);
                 orderType = nameof(BroadCastOrder);
             }
@@ -76,7 +73,7 @@ namespace Warehouse
                     reply.DeliveryTime = isInternal ? InternalShippingDays : ExternalShippingDays;
                     reply.ShippingFee = isInternal ? InternalShippingCharge : ExternalShippingCharge;
                 }
-                bus.Send(order.ReplyTo, reply);
+                _bus.Send(order.ReplyTo, reply);
                 Console.WriteLine("Order processed with deliverytype" +
                     type +
                     " at department" + department.Id);
@@ -84,7 +81,7 @@ namespace Warehouse
             else
             {
                 //No products of that Id
-                bus.Send(order.ReplyTo, new OrderReply(department.Id, order.Id, null, DeliveryEnum.None, orderType));
+                _bus.Send(order.ReplyTo, new OrderReply(department.Id, order.Id, null, DeliveryEnum.None, orderType));
 
                 Console.WriteLine("No products found at department" + department.Id);
             }

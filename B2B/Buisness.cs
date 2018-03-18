@@ -4,27 +4,26 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace B2B
 {
     public class Buisness
     {
-        private IBus bus = RabbitHutch.CreateBus("host=localhost");
-        private List<Order> OutstandingOrders = new List<Order>();
-        private Dictionary<int, List<OrderReply>> broadcastOrders = new Dictionary<int, List<OrderReply>>();
+        private readonly IBus _bus = RabbitHutch.CreateBus("host=localhost");
+        private readonly List<Order> _outstandingOrders = new List<Order>();
+        private readonly Dictionary<int, List<OrderReply>> _broadcastOrders = new Dictionary<int, List<OrderReply>>();
         public void Initialize()
         {
-            using (bus)
+            using (_bus)
             {
-                bus.Subscribe<BaseOrder>("CustomerRequests",
+                _bus.Subscribe<BaseOrder>("CustomerRequests",
                                            ProcessRequest);
-                bus.Subscribe<OrderReply>("DepartmentReplies",
+                _bus.Subscribe<OrderReply>("DepartmentReplies",
                                            ProcessReply, x => x.WithQueueName(nameof(Order)));
 
                 //bus.Subscribe<OrderReply>("DepartmentBroadcastReplies",
                 //                           ProcessBroadCastReply, x => x.WithQueueName(nameof(BroadCastOrder)));
-                bus.Subscribe<OrderReply>("DepartmentBroadcastReplies",
+                _bus.Subscribe<OrderReply>("DepartmentBroadcastReplies",
                                            ProcessBroadCastReply, x => x.WithQueueName(nameof(BroadCastOrder)));
                 
                 Console.WriteLine("Subscribed");
@@ -41,20 +40,20 @@ namespace B2B
             {
                 ReplyTo = nameof(Order)
             };
-            OutstandingOrders.Add(order);
-            bus.Publish(order, request.Customer.Country);
+            _outstandingOrders.Add(order);
+            _bus.Publish(order, request.Customer.Country);
             Console.WriteLine("Published Request");
         }
 
            private void ProcessBroadCastReply(OrderReply message)
         {
                 Console.WriteLine("Proccesing Broadcast reply");
-                if(!broadcastOrders.Any(x => x.Key == message.OrderId))
+                if(!_broadcastOrders.Any(x => x.Key == message.OrderId))
             {
-                broadcastOrders.Add(message.OrderId, new List<OrderReply>() { message });
+                _broadcastOrders.Add(message.OrderId, new List<OrderReply>() { message });
 
             }
-            var dictItem = broadcastOrders[message.OrderId];
+            var dictItem = _broadcastOrders[message.OrderId];
             if (dictItem != null && !dictItem.Contains(message))
             {
 
@@ -62,15 +61,15 @@ namespace B2B
                
             }
            
-            var order = OutstandingOrders.FirstOrDefault(x => x.Id == message.OrderId);
+            var order = _outstandingOrders.FirstOrDefault(x => x.Id == message.OrderId);
             if(order != null) { 
             if (dictItem.Any(x => x.DeliveryType == DeliveryEnum.Full))
             {
                 Console.WriteLine("Full order delivery possible");
-                bus.Publish(dictItem.FirstOrDefault(x => x.DeliveryType == DeliveryEnum.Full), order.Customer.Id);
-                    OutstandingOrders.Remove(order);
+                _bus.Publish(dictItem.FirstOrDefault(x => x.DeliveryType == DeliveryEnum.Full), order.Customer.Id);
+                    _outstandingOrders.Remove(order);
                 return;
-            }else if (dictItem.Sum(x => x.Product.Amount) > order.Product.Amount)
+            }else if (dictItem.Where(x => x.Product != null).Sum(x => x.Product.Amount) > order.Product.Amount)
             {
                 Console.WriteLine("Multiple partial delivery possible");
 
@@ -84,16 +83,16 @@ namespace B2B
                     DeliveryTime = currentOrders.Max(x => x.DeliveryTime),
                     ShippingFee = currentOrders.Sum(x => x.ShippingFee)
                 };
-                bus.Publish(replyMessage, order.Customer.Id);
-                    OutstandingOrders.Remove(order);
+                _bus.Publish(replyMessage, order.Customer.Id);
+                    _outstandingOrders.Remove(order);
                     return;
 
             }
             else if (dictItem.Count == 3)
             {
                 Console.WriteLine("No delivery possible");
-                bus.Publish(new OrderReply(-1, message.OrderId, order.Product, DeliveryEnum.None, null), order.Customer.Id);
-                    OutstandingOrders.Remove(order);
+                _bus.Publish(new OrderReply(-1, message.OrderId, order.Product, DeliveryEnum.None, null), order.Customer.Id);
+                    _outstandingOrders.Remove(order);
                 }
             }
         }
@@ -101,18 +100,18 @@ namespace B2B
         private void ProcessReply(OrderReply message)
         {
                 Console.WriteLine("Proccesing reply");
-                var order = OutstandingOrders.FirstOrDefault(x => x.Id == message.OrderId);
+                var order = _outstandingOrders.FirstOrDefault(x => x.Id == message.OrderId);
             if (order != null)
             {
                 if (message.DeliveryType == DeliveryEnum.Full)
                 {
-                    bus.Publish(message, order.Customer.Id);
+                    _bus.Publish(message, order.Customer.Id);
                     Console.WriteLine("Sent reply");
-                    OutstandingOrders.Remove(order);
+                    _outstandingOrders.Remove(order);
                 }
                 else
                 {
-                    bus.Publish(new BroadCastOrder(order.Id, order.Product, order.Customer)
+                    _bus.Publish(new BroadCastOrder(order.Id, order.Product, order.Customer)
                     {
                         ReplyTo = nameof(BroadCastOrder)
                     });
